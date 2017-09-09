@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/openchirp/framework"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -29,9 +29,22 @@ const (
 	runningStatus = true
 )
 
+const (
+	defaultDefaultType       = "int16"
+	propertyDefaultType      = "Default Type"
+	configIncomingFieldNames = "Incoming Field Names"
+	configIncomingFieldTypes = "Incoming Field Types"
+	configOutgoingFieldNames = "Outgoing Field Names"
+	configOutgoingFieldTypes = "Outgoing Field Types"
+	configAggregationDelay   = "Aggregation Delay"
+	configEndianness         = "Endianness"
+)
+
 func run(ctx *cli.Context) error {
 	/* Set logging level */
-	log.SetLevel(log.Level(uint32(ctx.Int("log-level"))))
+	// log.SetLevel(log.Level(uint32(ctx.Int("log-level"))))
+	log := logrus.New()
+	log.SetLevel(logrus.Level(uint32(ctx.Int("log-level"))))
 
 	log.Info("Starting Byte Translator Service ")
 
@@ -47,7 +60,7 @@ func run(ctx *cli.Context) error {
 		return cli.NewExitError(nil, 1)
 	}
 	defer c.StopClient()
-	log.Info("Started service")
+	log.Debug("Started service")
 
 	/* Post service status indicating I am starting */
 	err = c.SetStatus("Starting")
@@ -55,10 +68,26 @@ func run(ctx *cli.Context) error {
 		log.Error("Failed to publish service status: ", err)
 		return cli.NewExitError(nil, 1)
 	}
-	log.Info("Published Service Status")
+	log.Debug("Published Service Status")
+
+	/* Launch ByteTranslator */
+	defaultType := c.GetProperty(propertyDefaultType)
+	if len(defaultType) == 0 {
+		defaultType = defaultDefaultType
+	}
+	bt, err := NewByteTranslator(c, log, defaultType)
+	if err != nil {
+		log.Fatal("Failed to parse service property " + propertyDefaultType)
+		err = c.SetStatus("Service property " + propertyDefaultType + " invalid")
+		if err != nil {
+			log.Error("Failed to publish service status: ", err)
+			return cli.NewExitError(nil, 1)
+		}
+	}
+	log.Debug("Started ByteTranslator")
 
 	/* Start service main device updates stream */
-	log.Info("Starting Device Updates Stream")
+	log.Debug("Starting Device Updates Stream")
 	updates, err := c.StartDeviceUpdates()
 	if err != nil {
 		log.Error("Failed to start device updates stream: ", err)
@@ -67,7 +96,7 @@ func run(ctx *cli.Context) error {
 	defer c.StopDeviceUpdates()
 
 	/* Setup signal channel */
-	log.Info("Processing device updates")
+	log.Debug("Processing device updates")
 	signals := make(chan os.Signal)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
@@ -77,7 +106,7 @@ func run(ctx *cli.Context) error {
 		log.Error("Failed to publish service status: ", err)
 		return cli.NewExitError(nil, 1)
 	}
-	log.Info("Published Service Status")
+	log.Debug("Published Service Status")
 
 	for {
 		select {
@@ -89,21 +118,42 @@ func run(ctx *cli.Context) error {
 					log.Error("Failed to publish service status: ", err)
 					return cli.NewExitError(nil, 1)
 				}
-				log.Info("Published Service Status")
+				log.Debug("Published Service Status")
 			}
 
-			logitem := log.WithFields(log.Fields{"type": update.Type})
+			logitem := log.WithFields(logrus.Fields{"type": update.Type, "deviceid": update.Id})
 
 			switch update.Type {
 			case framework.DeviceUpdateTypeRem:
 				logitem.Info("Removing device")
+				bt.RemoveDevice(update.Id)
 			case framework.DeviceUpdateTypeUpd:
 				logitem.Info("Removing device for update")
+				bt.RemoveDevice(update.Id)
 				fallthrough
 			case framework.DeviceUpdateTypeAdd:
 				logitem.Info("Adding device")
-				c.SetDeviceStatus(update.Id, "Added device")
-				// devTopic := "openchirp/devices/" + update.Id + "/transducer"
+				deverr, runerr := bt.AddDevice(
+					update.Id,
+					update.Config[configIncomingFieldNames],
+					update.Config[configIncomingFieldTypes],
+					update.Config[configOutgoingFieldNames],
+					update.Config[configOutgoingFieldTypes],
+					update.Config[configEndianness],
+					update.Config[configAggregationDelay],
+				)
+				if runerr != nil {
+					// runtime error
+					logitem.Error("Failed to add device: ", runerr)
+					continue
+				}
+				if deverr != nil {
+					// device config error
+					logitem.Warn("Device config error: ", deverr)
+					c.SetDeviceStatus(update.Id, deverr)
+					continue
+				}
+				c.SetDeviceStatus(update.Id, "Success")
 			}
 		case sig := <-signals:
 			log.WithField("signal", sig).Info("Received signal")
