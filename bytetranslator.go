@@ -42,12 +42,12 @@ type Device struct {
 
 type ByteTranslator struct {
 	mqtt        MQTT
-	log         logrus.Logger
+	log         *logrus.Logger
 	devices     map[string]*Device
 	defaultType FieldType
 }
 
-func NewByteTranslator(mqtt MQTT, log logrus.Logger, defaultType string) (*ByteTranslator, error) {
+func NewByteTranslator(mqtt MQTT, log *logrus.Logger, defaultType string) (*ByteTranslator, error) {
 	if ftype := ParseFieldType(defaultType); ftype != FieldTypeUnknown {
 		return &ByteTranslator{
 			mqtt:        mqtt,
