@@ -118,6 +118,7 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 	// TODO: Implement TX side
 
 	/* Make byte marshaler based on config */
+	t.log.WithField("deviceid", deviceid).WithField("little_endian", littleEndian).Debug("Adding ByteMarshaller")
 	d.rxm = NewByteMarshaller(rxfieldtypes, t.defaultType, littleEndian)
 
 	/* Add to table of devices */
@@ -126,11 +127,12 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 	/* Setup subscriptions */
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	t.log.Debug("Subscribing to \"", devicePrefix+deviceid+deviceSuffix+"rawrx", "\"")
+	t.log.WithField("deviceid", deviceid).Debug("Subscribing to \"", devicePrefix+deviceid+deviceSuffix+"rawrx", "\"")
 	err = t.mqtt.Subscribe(
 		devicePrefix+deviceid+deviceSuffix+"rawrx",
 		func(topic string, payload []byte) {
-			t.log.Debug("Received rawrx for deviceid ", deviceid)
+			logitem := t.log.WithField("deviceid", deviceid)
+			logitem.Debug("Received rawrx for deviceid ", deviceid)
 			binary, err := base64.StdEncoding.DecodeString(string(payload))
 			if err != nil {
 				t.log.Error("Failed decode base64 from rawrx", err)
@@ -139,9 +141,10 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 			values, err := d.rxm.Unmarshal(binary)
 			if err != nil {
 				// had an error/warning while unmarshalling - publish error to /bytetranslator topic
+				logitem.Warnf("Deviceid %s has trailing bytes", deviceid)
 				err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+"bytetranslator", fmt.Sprint(err))
 				if err != nil {
-					t.log.Error("Failed to publish to device's bytetranslator topic: ", err)
+					logitem.Error("Failed to publish to device's bytetranslator topic: ", err)
 					return
 				}
 				// more of warnings -- so let's continue
@@ -149,16 +152,20 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 			for i, value := range values {
 				if i < len(d.rxfields) {
 					// publish to the named topic
-					err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+d.rxfields[i], fmt.Sprint(value))
+					topic := devicePrefix + deviceid + deviceSuffix + d.rxfields[i]
+					logitem.Debugf("Publishing %s to %s", fmt.Sprint(value), topic)
+					err = t.mqtt.Publish(topic, fmt.Sprint(value))
 					if err != nil {
-						t.log.Error("Failed to publish to device's \""+d.rxfields[i]+"\" topic: ", err)
+						logitem.Error("Failed to publish to device's \""+d.rxfields[i]+"\" topic: ", err)
 						return
 					}
 				} else {
 					// publish simply to the array index topic
-					err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+fmt.Sprint(i), fmt.Sprint(value))
+					topic := devicePrefix + deviceid + deviceSuffix + fmt.Sprint(i)
+					logitem.WithField("deviceid", deviceid).Debugf("Publishing %s to %s", fmt.Sprint(value), topic)
+					err = t.mqtt.Publish(topic, fmt.Sprint(value))
 					if err != nil {
-						t.log.Error("Failed to publish to device's \""+fmt.Sprint(i)+"\" topic: ", err)
+						logitem.Error("Failed to publish to device's \""+fmt.Sprint(i)+"\" topic: ", err)
 						return
 					}
 				}
