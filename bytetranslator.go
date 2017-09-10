@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultLittleEndian = true
-	devicePrefix        = "openchirp/device/"
+	devicePrefix        = "openchirp/devices/"
 	deviceSuffix        = "/transducer/"
 )
 
@@ -91,16 +91,20 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 	}
 
 	// get rx field names
-	d.rxfields = strings.Split(rxnames, ",")
+	if len(rxnames) > 0 {
+		d.rxfields = strings.Split(rxnames, ",")
+	}
 
 	// get rx field types
 	rxfieldtypes := make([]FieldType, 0)
-	for _, rxf := range strings.Split(rxtypes, ",") {
-		ft := ParseFieldType(rxf)
-		if ft == FieldTypeUnknown {
-			return fmt.Errorf("Failed to parse incoming field type \"%s\"", rxf), nil
+	if len(rxtypes) > 0 {
+		for _, rxf := range strings.Split(rxtypes, ",") {
+			ft := ParseFieldType(rxf)
+			if ft == FieldTypeUnknown {
+				return fmt.Errorf("Failed to parse incoming field type \"%s\"", rxf), nil
+			}
+			rxfieldtypes = append(rxfieldtypes, ft)
 		}
-		rxfieldtypes = append(rxfieldtypes, ft)
 	}
 
 	// get tx field names
@@ -116,9 +120,11 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 	/* Setup subscriptions */
 	d.lock.Lock()
 	defer d.lock.Unlock()
+	t.log.Debug("Subscribing to \"", devicePrefix+deviceid+deviceSuffix+"rawrx", "\"")
 	err = t.mqtt.Subscribe(
 		devicePrefix+deviceid+deviceSuffix+"rawrx",
 		func(topic string, payload []byte) {
+			t.log.Debug("Received rawrx for deviceid ", deviceid)
 			binary, err := base64.StdEncoding.DecodeString(string(payload))
 			if err != nil {
 				t.log.Error("Failed decode base64 from rawrx", err)
@@ -135,18 +141,19 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 				// more of warnings -- so let's continue
 			}
 			for i, value := range values {
+				t.log.Debug("value = ", value, " index = ", i, "len(d.rxfiends) = ", len(d.rxfields), ": ", d.rxfields)
 				if i < len(d.rxfields) {
 					// publish to the named topic
-					err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+d.rxfields[i], value)
+					err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+d.rxfields[i], fmt.Sprint(value))
 					if err != nil {
-						t.log.Error("Failed to publish to device's "+d.rxfields[i]+" topic", err)
+						t.log.Error("Failed to publish to device's \""+d.rxfields[i]+"\" topic: ", err)
 						return
 					}
 				} else {
 					// publish simply to the array index topic
-					err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+string(i), value)
+					err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+fmt.Sprint(i), fmt.Sprint(value))
 					if err != nil {
-						t.log.Error("Failed to publish to device's "+string(i)+" topic", err)
+						t.log.Error("Failed to publish to device's \""+fmt.Sprint(i)+"\" topic: ", err)
 						return
 					}
 				}
