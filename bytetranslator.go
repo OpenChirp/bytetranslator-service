@@ -94,11 +94,17 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 	if len(rxnames) > 0 {
 		d.rxfields = strings.Split(rxnames, ",")
 	}
+	// remove possible space
+	for i, name := range d.rxfields {
+		d.rxfields[i] = strings.TrimSpace(name)
+	}
 
 	// get rx field types
 	rxfieldtypes := make([]FieldType, 0)
 	if len(rxtypes) > 0 {
 		for _, rxf := range strings.Split(rxtypes, ",") {
+			// remove possible space
+			rxf = strings.TrimSpace(rxf)
 			ft := ParseFieldType(rxf)
 			if ft == FieldTypeUnknown {
 				return fmt.Errorf("Failed to parse incoming field type \"%s\"", rxf), nil
@@ -133,15 +139,14 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 			values, err := d.rxm.Unmarshal(binary)
 			if err != nil {
 				// had an error/warning while unmarshalling - publish error to /bytetranslator topic
-				err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+"bytetranslator", err)
+				err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+"bytetranslator", fmt.Sprint(err))
 				if err != nil {
-					t.log.Error("Failed to publish to device's bytetranslator topic", err)
+					t.log.Error("Failed to publish to device's bytetranslator topic: ", err)
 					return
 				}
 				// more of warnings -- so let's continue
 			}
 			for i, value := range values {
-				t.log.Debug("value = ", value, " index = ", i, "len(d.rxfiends) = ", len(d.rxfields), ": ", d.rxfields)
 				if i < len(d.rxfields) {
 					// publish to the named topic
 					err = t.mqtt.Publish(devicePrefix+deviceid+deviceSuffix+d.rxfields[i], fmt.Sprint(value))
