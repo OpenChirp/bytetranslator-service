@@ -177,17 +177,18 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 
 func (t *ByteTranslator) RemoveDevice(deviceid string) {
 	// remove device from devices table
-	d := t.devices[deviceid]
-	d.lock.Lock()
-	defer d.lock.Unlock()
-	delete(t.devices, deviceid)
+	if d, ok := t.devices[deviceid]; ok {
+		d.lock.Lock()
+		defer d.lock.Unlock()
+		delete(t.devices, deviceid)
 
-	// remove mqtt subscriptions
-	t.mqtt.Unsubscribe(devicePrefix + deviceid + deviceSuffix + "rawrx")
-	for _, txf := range d.txfields {
-		t.mqtt.Unsubscribe(devicePrefix + deviceid + deviceSuffix + txf)
+		// remove mqtt subscriptions
+		t.mqtt.Unsubscribe(devicePrefix + deviceid + deviceSuffix + "rawrx")
+		for _, txf := range d.txfields {
+			t.mqtt.Unsubscribe(devicePrefix + deviceid + deviceSuffix + txf)
+		}
+
+		// set to not scheduled - to avoid scheduled device being published on
+		d.txscheduled = false
 	}
-
-	// set to not scheduled - to avoid scheduled device being published on
-	d.txscheduled = false
 }
