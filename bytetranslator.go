@@ -161,7 +161,7 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 					}
 				} else {
 					// publish simply to the array index topic
-					topic := devicePrefix + deviceid + deviceSuffix + fmt.Sprint(i)
+					topic := devicePrefix + deviceid + deviceSuffix + fmt.Sprintf("UnnamedValue%d", i)
 					logitem.WithField("deviceid", deviceid).Debugf("Publishing %s to %s", fmt.Sprint(value), topic)
 					err = t.mqtt.Publish(topic, fmt.Sprint(value))
 					if err != nil {
