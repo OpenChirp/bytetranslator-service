@@ -42,7 +42,6 @@ const (
 
 func run(ctx *cli.Context) error {
 	/* Set logging level */
-	// log.SetLevel(log.Level(uint32(ctx.Int("log-level"))))
 	log := logrus.New()
 	log.SetLevel(logrus.Level(uint32(ctx.Int("log-level"))))
 
