@@ -88,7 +88,7 @@ func run(ctx *cli.Context) error {
 
 	/* Start service main device updates stream */
 	log.Debug("Starting Device Updates Stream")
-	updates, err := c.StartDeviceUpdates()
+	updates, err := c.StartDeviceUpdatesSimple()
 	if err != nil {
 		log.Error("Failed to start device updates stream: ", err)
 		return cli.NewExitError(nil, 1)
