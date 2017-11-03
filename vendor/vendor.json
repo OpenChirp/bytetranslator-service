@@ -1,0 +1,19 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "MqWreTqa8QYLvsPbtISuziPL5bQ=",
+			"path": "github.com/openchirp/framework",
+			"revision": "34d08a76a35c8276bbf55eced642bcc42ac2b814",
+			"revisionTime": "2017-11-03T20:41:43Z"
+		},
+		{
+			"checksumSHA1": "YtMZfqy81IsR/KhupUu5qM/hGWk=",
+			"path": "github.com/openchirp/framework/rest",
+			"revision": "34d08a76a35c8276bbf55eced642bcc42ac2b814",
+			"revisionTime": "2017-11-03T20:41:43Z"
+		}
+	],
+	"rootPath": "github.com/openchirp/bytetranslator-service"
+}
