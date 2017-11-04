@@ -9,7 +9,30 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strconv"
 )
+
+type NumberType uint8
+
+const (
+	NumberTypeUnknown NumberType = iota
+	NumberTypeUnsignedInt
+	NumberTypeSignedInt
+	NumberTypeFloat
+)
+
+func (nt NumberType) String() string {
+	switch nt {
+	case NumberTypeUnsignedInt:
+		return "UnsignedInt"
+	case NumberTypeSignedInt:
+		return "SignedInt"
+	case NumberTypeFloat:
+		return "Float"
+	default:
+		return "Unknown"
+	}
+}
 
 type FieldType uint8
 
@@ -78,6 +101,174 @@ func (ft FieldType) String() string {
 
 func (ft FieldType) ByteCount() int {
 	return fieldTypeInfo[ft].bytes
+}
+
+func (ft FieldType) GetNumberType() NumberType {
+	switch ft {
+	case FieldTypeUint8:
+		fallthrough
+	case FieldTypeUint16:
+		fallthrough
+	case FieldTypeUint32:
+		fallthrough
+	case FieldTypeUint64:
+		return NumberTypeUnsignedInt
+
+	case FieldTypeInt8:
+		fallthrough
+	case FieldTypeInt16:
+		fallthrough
+	case FieldTypeInt32:
+		fallthrough
+	case FieldTypeInt64:
+		return NumberTypeSignedInt
+
+	case FieldTypeFloat32:
+		fallthrough
+	case FieldTypeFloat64:
+		return NumberTypeFloat
+
+	default:
+		return NumberTypeUnknown
+	}
+}
+
+func (ft FieldType) Marshal(buffer []byte, value interface{}, order binary.ByteOrder) int {
+	var err error
+	var i64 int64
+	var u64 uint64
+	var f64 float64
+
+	if ft == FieldTypeUnknown {
+		return 0
+	}
+
+	// All types other than floats can fit into a u64 without loosing data.
+	// This would look relatively clean, but floats introduce different type
+	// casting scheme.
+	// Since floats take on different pos/neg values when type casted
+	// to unsigned or signed, we need to actually cast it to a u64 and an i64
+	// up front.
+	// To reduce clutter, we will simply do all three type conversion for every
+	// innput type.
+	// Another assumption is that a float64 can always represent a float32.
+	// If this is untrue, this routine needs to be revised.
+	switch value.(type) {
+	case uint8:
+		u64 = uint64(value.(uint8))
+		i64 = int64(u64)
+		f64 = float64(value.(uint8))
+	case uint16:
+		u64 = uint64(value.(uint16))
+		i64 = int64(u64)
+		f64 = float64(value.(uint16))
+	case uint32:
+		u64 = uint64(value.(uint32))
+		i64 = int64(u64)
+		f64 = float64(value.(uint32))
+	case uint64:
+		u64 = uint64(value.(uint64))
+		i64 = int64(u64)
+		f64 = float64(value.(uint64))
+
+	case int8:
+		u64 = uint64(int64(value.(int8)))
+		i64 = int64(u64)
+		f64 = float64(value.(int8))
+	case int16:
+		u64 = uint64(int64(value.(int16)))
+		i64 = int64(u64)
+		f64 = float64(value.(int16))
+	case int32:
+		u64 = uint64(int64(value.(int32)))
+		i64 = int64(u64)
+		f64 = float64(value.(int32))
+	case int64:
+		u64 = uint64(int64(value.(int64)))
+		i64 = int64(u64)
+		f64 = float64(value.(int64))
+
+	case float32:
+		f64 = float64(value.(float32))
+		u64 = uint64(f64)
+		i64 = int64(f64)
+	case float64:
+		f64 = float64(value.(float64))
+		u64 = uint64(f64)
+		i64 = int64(f64)
+
+	case string:
+		switch ft {
+		case FieldTypeUint8:
+			fallthrough
+		case FieldTypeUint16:
+			fallthrough
+		case FieldTypeUint32:
+			fallthrough
+		case FieldTypeUint64:
+			u64, err = strconv.ParseUint(value.(string), 10, 64)
+			i64 = int64(u64)
+			f64 = float64(u64)
+
+		case FieldTypeInt8:
+			fallthrough
+		case FieldTypeInt16:
+			fallthrough
+		case FieldTypeInt32:
+			fallthrough
+		case FieldTypeInt64:
+			i64, err = strconv.ParseInt(value.(string), 10, 64)
+			f64 = float64(i64)
+			u64 = uint64(i64)
+
+		case FieldTypeFloat32:
+			fallthrough
+		case FieldTypeFloat64:
+			f64, err = strconv.ParseFloat(value.(string), 64)
+			u64 = uint64(f64)
+			i64 = int64(f64)
+		}
+	default:
+		return 0
+	}
+
+	// If we failed to parse the string
+	if err != nil {
+		return 0
+	}
+
+	switch ft {
+	case FieldTypeUint8:
+		buffer[0] = byte(uint8(u64))
+	case FieldTypeInt8:
+		// Again, i64 could yield a different result from u64
+		// if the original type has a float
+		buffer[0] = byte(uint8(i64))
+
+	case FieldTypeUint16:
+		order.PutUint16(buffer, uint16(u64))
+	case FieldTypeInt16:
+		order.PutUint16(buffer, uint16(i64))
+
+	case FieldTypeUint32:
+		order.PutUint32(buffer, uint32(u64))
+	case FieldTypeInt32:
+		order.PutUint32(buffer, uint32(i64))
+
+	case FieldTypeUint64:
+		order.PutUint64(buffer, uint64(u64))
+	case FieldTypeInt64:
+		order.PutUint64(buffer, uint64(i64))
+
+	case FieldTypeFloat32:
+		order.PutUint32(buffer, math.Float32bits(float32(f64)))
+	case FieldTypeFloat64:
+		order.PutUint64(buffer, math.Float64bits(float64(f64)))
+	default:
+		return 0
+	}
+
+	return ft.ByteCount()
 }
 
 func (ft FieldType) Unmarshal(bytes []byte, order binary.ByteOrder) interface{} {
@@ -160,8 +351,43 @@ func NewByteMarshaller(types []FieldType, defaultType FieldType, littleEndian bo
 	return &ByteMarshaller{binary.BigEndian, types, defaultType}
 }
 
-func (m *ByteMarshaller) Marshal(values ...interface{}) {
-	//TODO: Implement
+// This function will always create a byte buffer even when an error is passed.
+func (m *ByteMarshaller) Marshal(values []interface{}) ([]byte, error) {
+	var err error
+	/* Calculate size of buffer */
+	size := 0
+	for findex, _ := range values {
+		if findex < len(m.types) {
+			size += m.types[findex].ByteCount()
+		} else {
+			size += m.defaultType.ByteCount()
+		}
+	}
+
+	buffer := make([]byte, size)
+
+	/* Marshal each field */
+	bindex := 0
+	for findex, value := range values {
+		if findex < len(m.types) {
+			count := m.types[findex].Marshal(buffer[bindex:], value, m.order)
+			if count == 0 {
+				// this means there was a parse error or FieldType==Unknown
+				err = fmt.Errorf("Parsing error or unknown data type")
+				count = m.types[findex].ByteCount()
+			}
+			bindex += count
+		} else {
+			count := m.defaultType.Marshal(buffer[bindex:], value, m.order)
+			if count == 0 {
+				// this means there was a parse error or FieldType==Unknown
+				err = fmt.Errorf("Parsing error or unknown data type")
+				count = m.defaultType.ByteCount()
+			}
+			bindex += count
+		}
+	}
+	return buffer, err
 }
 
 // Unmarshal tries to decode as many known types as possible from the byte array.
