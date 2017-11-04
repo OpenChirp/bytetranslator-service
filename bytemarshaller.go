@@ -14,7 +14,9 @@ import (
 type FieldType uint8
 
 const (
-	FieldTypeUint8 FieldType = iota
+	// The field type is unknown. Handlers will ignore these fields.
+	FieldTypeUnknown FieldType = iota
+	FieldTypeUint8
 	FieldTypeUint16
 	FieldTypeUint32
 	FieldTypeUint64
@@ -24,7 +26,6 @@ const (
 	FieldTypeInt64
 	FieldTypeFloat32
 	FieldTypeFloat64
-	FieldTypeUnknown
 )
 
 func ParseFieldType(name string) FieldType {
