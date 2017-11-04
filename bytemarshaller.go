@@ -144,6 +144,8 @@ func (ft FieldType) Unmarshal(bytes []byte, order binary.ByteOrder) interface{} 
 	return nil
 }
 
+// ByteMarshaller handles types related to positions.
+// Setting defaultType to UnknownType would mean the field is omitted
 type ByteMarshaller struct {
 	order       binary.ByteOrder
 	types       []FieldType
