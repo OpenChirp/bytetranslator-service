@@ -55,5 +55,6 @@ ByteTranslator will fetch the following two parameters from the Service's
 * `Outgoing Queue Length Topic` - The topic on which the service will publish
   the running size of a device's outgoing message queue. When using an
   `Aggregation Delay` larger than 0, this topic will increment as more outgoing
-  values are aggregated. Omitting this parameter or setting it to "", disables
-  the functionality.
+  values are aggregated. Setting this parameters to "", disables
+  the functionality. If this parameter is omitted, the default topic
+  `outgoingqueue` is used.
