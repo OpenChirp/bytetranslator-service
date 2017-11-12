@@ -50,9 +50,10 @@ func (d *Device) txBufferMarshal() []byte {
 }
 
 func (d *Device) txBufferAdd(value interface{}, findex int) error {
+	logitem := d.bt.log.WithField("deviceid", d.deviceid)
 	bytes, err := d.txm.MarshalValue(value, findex)
-	fmt.Printf("Bytes: %v\n", bytes)
 	d.txbuffer[findex] = bytes
+	logitem.Debugf("Queued field index %d with %v", findex, bytes)
 	return err
 }
 
@@ -71,13 +72,15 @@ func (d *Device) TxBufferReset() {
 }
 
 func (d *Device) PublishOutgoingQueueLength(length int) {
+	logitem := d.bt.log.WithField("deviceid", d.deviceid)
+	logitem.Debugf("Outgoing queue length is %d", length)
 	if d.bt.pubOutgoingQueue {
 		err := d.bt.mqtt.Publish(devicePrefix+d.deviceid+deviceSuffix+d.bt.outgoingQueueTopic, fmt.Sprint(length))
 		if err != nil {
-			d.bt.log.Errorf("Failed to publish to device's %s topic: %v", d.bt.outgoingQueueTopic, err)
+			logitem.Errorf("Failed to publish to device's %s topic: %v", d.bt.outgoingQueueTopic, err)
 			return
 		}
-		d.bt.log.Debugf("Published to %s", d.bt.outgoingQueueTopic)
+		logitem.Debugf("Published to %s", d.bt.outgoingQueueTopic)
 	}
 }
 
@@ -166,7 +169,7 @@ func (d *Device) RawRx(payload string) {
 func (d *Device) Subscribe() error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	d.bt.log.WithField("deviceid", d.deviceid).Debug("Subscribing to \"", devicePrefix+d.deviceid+deviceSuffix+"rawrx", "\"")
+	d.bt.log.WithField("deviceid", d.deviceid).Info("Subscribing to " + devicePrefix + d.deviceid + deviceSuffix + "+")
 
 	err := d.bt.mqtt.Subscribe(
 		devicePrefix+d.deviceid+deviceSuffix+"+",
@@ -179,7 +182,7 @@ func (d *Device) Subscribe() error {
 				d.RawRx(string(payload))
 			} else if groups := unnamedOutgoingValPattern.FindStringSubmatch(subtopic); len(groups) == 2 {
 				findex, err := strconv.ParseUint(groups[1], 10, unnamedValueOutIndexBitWidth)
-				logitem.Debugf("Received unnamed tx value on %s. Interpreted as field index %d", subtopic, findex)
+				logitem.Debugf("Received unnamed tx value for index %d", findex)
 				if err != nil {
 					logitem.Errorf("Failed to parse field index of %s", subtopic)
 					return
@@ -212,6 +215,7 @@ func (d *Device) Unsubscribe() {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
+	d.bt.log.WithField("deviceid", d.deviceid).Info("Unsubscribing from " + devicePrefix + d.deviceid + deviceSuffix + "+")
 	// remove mqtt subscriptions
 	d.bt.mqtt.Unsubscribe(devicePrefix + d.deviceid + deviceSuffix + "+")
 

@@ -420,7 +420,6 @@ func (m *ByteMarshaller) MarshalValues(values map[int][]byte) []byte {
 	}
 
 	buffer := make([]byte, 0, ((maxfindex+1)-minfindex)*defaultBufferSizeMultiplier)
-	fmt.Println("Buffer before:", buffer)
 
 	var findex int
 	for findex = minfindex; findex <= maxfindex; findex++ {
@@ -430,7 +429,6 @@ func (m *ByteMarshaller) MarshalValues(values map[int][]byte) []byte {
 			bytes, _ := m.MarshalValue(defaultFieldEmptyValue, findex)
 			buffer = append(buffer, bytes...)
 		}
-		fmt.Println("FIndex=", findex, "Bytes this turn:", buffer)
 	}
 
 	if alwaysIncludeAllFields {
