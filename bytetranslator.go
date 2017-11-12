@@ -112,7 +112,7 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 	}
 
 	// get tx field names
-	if len(rxnames) > 0 {
+	if len(txnames) > 0 {
 		d.txfields = strings.Split(txnames, ",")
 	}
 	// remove possible space
@@ -122,7 +122,7 @@ func (t *ByteTranslator) AddDevice(deviceid, rxnames, rxtypes, txnames, txtypes,
 	// get tx field types
 	txfieldtypes := make([]FieldType, 0)
 	if len(txtypes) > 0 {
-		for _, txf := range strings.Split(rxtypes, ",") {
+		for _, txf := range strings.Split(txtypes, ",") {
 			// remove possible space
 			txf = strings.TrimSpace(txf)
 			ft := ParseFieldType(txf)
