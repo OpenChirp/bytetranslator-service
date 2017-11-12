@@ -52,6 +52,7 @@ ByteTranslator will fetch the following two parameters from the Service's
 "Custom Properties" on startup:
 * `Default Type` - This allows you to specify a service-wide default data type
   to use in unmarshalling payloads without a specified data type.
+  If this parameter is omitted or "", the default `int16` is used.
 * `Outgoing Queue Length Topic` - The topic on which the service will publish
   the running size of a device's outgoing message queue. When using an
   `Aggregation Delay` larger than 0, this topic will increment as more outgoing
