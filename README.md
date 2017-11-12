@@ -18,7 +18,7 @@ see the `Missing Config Incoming/Outgoing Behavior` sections.
 * `Aggregation Delay` - The duration of time to wait, while aggregating
   outgoing data fields, before sending.
   This is a sequence of decimal numbers, each with optional fraction and a
-  unit suffix, such as "300ms", "-1.5h" or "2h45m".
+  unit suffix, such as "300ms", "1.5h" or "2h45m".
   Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 # Design Decisions
