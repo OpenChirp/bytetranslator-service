@@ -165,8 +165,12 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 		fmt.Sprint(val),
 		fmt.Sprint(val),
 		fmt.Sprint(val),
-		fmt.Sprint(val),
-		fmt.Sprint(val),
+		// The folowing two type cast and formatting lines are very important
+		// for ensuring that the floating precision is consistent when
+		// represented as a string. When simply using fmt.Sprint(val),
+		// precision is lost when it places the float in scientific form.
+		fmt.Sprintf("%f", TypeCast(val, reflect.TypeOf(float64(0))).(float64)),
+		fmt.Sprintf("%f", TypeCast(val, reflect.TypeOf(float64(0))).(float64)),
 	}
 
 	bm := NewByteMarshaller(types, defaultByteMarshallerType, true)
