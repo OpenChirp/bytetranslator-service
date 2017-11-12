@@ -11,6 +11,11 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
+const (
+	debugMessages                   = true
+	quitOnPayloadEquivalenceFailure = false
+)
+
 func TestIntegerStuff(t *testing.T) {
 	Convey("Given some integer with a starting value", t, func() {
 		x := 1
@@ -166,45 +171,95 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 
 	bm := NewByteMarshaller(types, defaultByteMarshallerType, true)
 	if bm == nil {
-		t.Errorf("NewByteTranslator return nil")
+		t.Errorf("Err: NewByteTranslator return nil")
 	}
 
 	payload, err := bm.Marshal(values)
 	if err != nil {
-		t.Logf("Marshal returned error: %v", err)
+		t.Logf("Err: Marshal of std types returned error: %v", err)
 		return false
 	}
 
 	strpayload, err := bm.Marshal(valuesString)
 	if err != nil {
-		t.Logf("Marshal of string value returned error: %v", err)
+		t.Logf("Err: Marshal of string value returned error: %v", err)
+		t.Logf("Standard Types: %v", values)
+		t.Logf("String Types:   %v", valuesString)
 		return false
 	}
 
+	// Check that marshalled payload are byte equivalent
 	if !bytes.Equal(payload, strpayload) {
-		t.Logf("Marshal of value and Marshal of value as string yield different payloads")
-		return false
+		t.Logf("Err: Marshalling values from standard types vs. marshalling from strings yieldied different payloads")
+		t.Logf("std types payload: %v", payload)
+		t.Logf("strings payload:   %v", strpayload)
+
+		if quitOnPayloadEquivalenceFailure {
+			return false
+		}
 	}
 
+	/*
+		Try to unmarshal the marshalled payload from the standard values
+		and check that the output values match the input marshalled values.
+	*/
 	retval, err := bm.Unmarshal(payload)
 	if err != nil {
-		t.Logf("Unmarshal returned error: %v", err)
+		t.Logf("Err: Unmarshal returned error: %v", err)
 		return false
 	}
 
 	if len(retval) != len(values) {
-		t.Logf("Unmarshal returned invalid number of values (%d values)", len(retval))
+		t.Logf("Err: Unmarshal returned invalid number of values (%d values)", len(retval))
 		return false
 	}
 
 	// Check that the type conversion were done correctly
 	for i, value := range retval {
 		truthValue := TypeCast(values[i], types[i].GetGoType())
-		// t.Logf("As a %v value should be %v", types[i], truthValue)
+		if debugMessages {
+			t.Logf("As a %v value should be %v", types[i], truthValue)
+		}
 		if !reflect.DeepEqual(value, truthValue) {
+			t.Logf("Err: Marshalled and Unmarshalled values do not match (outvalue=%v truthvalue=%v)", value, truthValue)
 			t.Logf("As a %v value should have been %v", types[i], truthValue)
-			t.Logf("Marshalled and Unmarshalled values do not match (outvalue=%v truthvalue=%v)", value, truthValue)
 			return false
+		}
+	}
+
+	/*
+		Try to unmarshal the marshalled payload from the string values
+		and check that the output values match the input marshalled values.
+
+		This is only useful if you have disabled the "return false" when
+		checking that the two marshalled payload are byte equivalent.
+		In otherwords, set quitOnPayloadEquivalenceFailure to false
+	*/
+	if !quitOnPayloadEquivalenceFailure {
+		retval, err := bm.Unmarshal(strpayload)
+		if err != nil {
+			t.Logf("Unmarshal returned error: %v", err)
+			return false
+		}
+
+		if len(retval) != len(values) {
+			t.Logf("Unmarshal returned invalid number of values (%d values)", len(retval))
+			return false
+		}
+
+		// Check that the type conversion were done correctly
+		for i, value := range retval {
+			truthValue := TypeCast(values[i], types[i].GetGoType())
+			if debugMessages {
+				t.Logf("As a %v value should be %v", types[i], truthValue)
+			}
+			if !reflect.DeepEqual(value, truthValue) {
+				t.Logf("As a %v value should have been %v", types[i], truthValue)
+				t.Logf("Std Value: %v = %f", values[i], values[i])
+				t.Logf("Str Value: %v", valuesString[i])
+				t.Logf("Marshalled and Unmarshalled values do not match (outvalue=%v truthvalue=%v)", value, truthValue)
+				return false
+			}
 		}
 	}
 
@@ -266,144 +321,5 @@ func TestAllTypes(t *testing.T) {
 			})
 		}
 
-	})
-}
-
-func TestUint8FieldExtended(t *testing.T) {
-	tester := func(value uint8) bool {
-		return UniversalTester(t, value)
-	}
-	Convey("Marshalling and unmarshalling given value with all cast possibilities", t, func() {
-		if err := quick.Check(tester, nil); err != nil {
-			t.Error(err)
-		}
-		So(1, ShouldEqual, 1)
-	})
-}
-
-func TestInt8FieldExtended(t *testing.T) {
-	tester := func(value int8) bool {
-		return UniversalTester(t, value)
-	}
-	Convey("Marshalling and unmarshalling given value with all cast possibilities", t, func() {
-		err := quick.Check(tester, nil)
-		So(err, ShouldBeNil)
-	})
-}
-
-func TestInt16FieldExtended(t *testing.T) {
-	tester := func(value int16) bool {
-		return UniversalTester(t, value)
-	}
-	if err := quick.Check(tester, nil); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestUint16Field(t *testing.T) {
-	bmtype := FieldTypeUint16
-	types := []FieldType{
-		bmtype,
-	}
-	bm := NewByteMarshaller(types, FieldTypeFloat64, true)
-	if bm == nil {
-		t.Errorf("NewByteTranslator return nil")
-	}
-
-	tester := func(val uint16) bool {
-		payload, err := bm.Marshal([]interface{}{val})
-		if err != nil {
-			t.Logf("Marshal returned error: %v", err)
-			return false
-		}
-
-		strpayload, err := bm.Marshal([]interface{}{fmt.Sprint(val)})
-		if err != nil {
-			t.Logf("Marshal of string value returned error: %v", err)
-			return false
-		}
-
-		if !bytes.Equal(payload, strpayload) {
-			t.Logf("Marshal of value and Marshal of value as string yield different payloads")
-			return false
-		}
-
-		retval, err := bm.Unmarshal(payload)
-		if err != nil {
-			t.Logf("Unmarshal returned error: %v", err)
-			return false
-		}
-
-		if len(retval) != 1 {
-			t.Logf("Unmarshal returned too many values (%d values)", len(retval))
-			return false
-		}
-
-		if retval[0] != val {
-			t.Logf("Marshalled and Unmarshalled values do not match (%v != %v)", retval[0], val)
-			return false
-		}
-
-		return true
-	}
-
-	Convey("Marshalling and unmarshalling the value should yield the original value", t, func() {
-		if err := quick.Check(tester, nil); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
-func TestInt16Field(t *testing.T) {
-	bmtype := FieldTypeInt16
-	types := []FieldType{
-		bmtype,
-	}
-	bm := NewByteMarshaller(types, FieldTypeFloat64, true)
-	if bm == nil {
-		t.Errorf("NewByteTranslator return nil")
-	}
-
-	tester := func(val int16) bool {
-		payload, err := bm.Marshal([]interface{}{val})
-		if err != nil {
-			t.Logf("Marshal returned error: %v", err)
-			return false
-		}
-
-		strpayload, err := bm.Marshal([]interface{}{fmt.Sprint(val)})
-		if err != nil {
-			t.Logf("Marshal of string value returned error: %v", err)
-			return false
-		}
-
-		if !bytes.Equal(payload, strpayload) {
-			t.Logf("Marshal of value and Marshal of value as string yield different payloads")
-			return false
-		}
-
-		retval, err := bm.Unmarshal(payload)
-		if err != nil {
-			t.Logf("Unmarshal returned error: %v", err)
-			return false
-		}
-
-		if len(retval) != 1 {
-			t.Logf("Unmarshal returned too many values (%d values)", len(retval))
-			return false
-		}
-
-		if retval[0] != val {
-			t.Logf("Marshalled and Unmarshalled values do not match (%v != %v)", retval[0], val)
-			return false
-		}
-
-		return true
-	}
-
-	Convey("Marshalling and unmarshalling the value should yield the original value", t, func() {
-		if err := quick.Check(tester, nil); err != nil {
-			t.Error(err)
-		}
 	})
 }
