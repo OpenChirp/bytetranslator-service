@@ -120,8 +120,6 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 
 	t.Log("Testing", reflect.TypeOf(val), val)
 
-	// valt := reflect.TypeOf(v)
-
 	// Here we will try to convert the given value/type to each of the possible
 	// other types using Marshal and a field for each possible type
 	// We want to verify that the conversion followed the same rules
@@ -194,27 +192,17 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 		return false
 	}
 
-	// if len(retval) != 1 {
-	// 	t.Logf("Unmarshal returned too many values (%d values)", len(retval))
-	// 	return false
-	// }
-
 	if len(retval) != len(values) {
 		t.Logf("Unmarshal returned invalid number of values (%d values)", len(retval))
 		return false
 	}
 
-	// if retval[0] != val {
-	// 	t.Logf("Marshalled and Unmarshalled values do not match (%v != %v)", retval[0], val)
-	// 	return false
-	// }
-
 	// Check that the type conversion were done correctly
 	for i, value := range retval {
 		truthValue := TypeCast(values[i], types[i].GetGoType())
-		t.Logf("As a %v value should be %v", types[i], truthValue)
-		// if reflect.ValueOf(value) != reflect.ValueOf(truthValue) {
+		// t.Logf("As a %v value should be %v", types[i], truthValue)
 		if !reflect.DeepEqual(value, truthValue) {
+			t.Logf("As a %v value should have been %v", types[i], truthValue)
 			t.Logf("Marshalled and Unmarshalled values do not match (outvalue=%v truthvalue=%v)", value, truthValue)
 			return false
 		}
@@ -223,8 +211,62 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 	return true
 }
 
-func RunUniversalTester(t *testing.T, gotype reflect.Type) bool {
-	return true
+func TestAllTypes(t *testing.T) {
+	alltypes := []FieldType{
+		FieldTypeUint8,
+		FieldTypeUint16,
+		FieldTypeUint32,
+		FieldTypeUint64,
+		FieldTypeInt8,
+		FieldTypeInt16,
+		FieldTypeInt32,
+		FieldTypeInt64,
+		FieldTypeFloat32,
+		FieldTypeFloat64,
+	}
+
+	alltesters := []interface{}{
+		func(value uint8) bool {
+			return UniversalTester(t, value)
+		},
+		func(value uint16) bool {
+			return UniversalTester(t, value)
+		},
+		func(value uint32) bool {
+			return UniversalTester(t, value)
+		},
+		func(value uint64) bool {
+			return UniversalTester(t, value)
+		},
+		func(value int8) bool {
+			return UniversalTester(t, value)
+		},
+		func(value int16) bool {
+			return UniversalTester(t, value)
+		},
+		func(value int32) bool {
+			return UniversalTester(t, value)
+		},
+		func(value int64) bool {
+			return UniversalTester(t, value)
+		},
+		func(value float32) bool {
+			return UniversalTester(t, value)
+		},
+		func(value float64) bool {
+			return UniversalTester(t, value)
+		},
+	}
+
+	Convey("Testing marshalling and unmarshalling of all types", t, func() {
+		for i, bmtype := range alltypes {
+			Convey("Trying "+bmtype.String()+" input types", func() {
+				err := quick.Check(alltesters[i], nil)
+				So(err, ShouldBeNil)
+			})
+		}
+
+	})
 }
 
 func TestUint8FieldExtended(t *testing.T) {
