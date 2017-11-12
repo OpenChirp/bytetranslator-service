@@ -32,3 +32,27 @@ names specified, then the message emitted will include blank elements for all
 all other specified fields. If the unnamed field refers to an index larger than
 the number of specified fields, the message emitted will have all previous
 indices' value blanked out, with the last value being the unnamed value's index.
+
+# Device's Service Config
+Note that all config parameters are optional and can be inferred or fall back on defaults.
+* `Incoming Field Names` - The names to assign to data fields received from the device
+* `Incoming Field Types` - The types used to encode the data fields from the device
+* `Outgoing Field Types` - The names of the transducers to send as fields to the device
+* `Outgoing Field Names` - The types used to encode the data fields sent to the device
+* `Endianness` - Indicates the order of bytes comprising an integer. (`little` or `big`)
+* `Aggregation Delay` - The duration of time to wait, while aggregating
+  outgoing data fields, before sending.
+  This is a sequence of decimal numbers, each with optional fraction and a
+  unit suffix, such as "300ms", "-1.5h" or "2h45m".
+  Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+
+# Service Level Configuration
+ByteTranslator will fetch the following two parameters from the Service's
+"Custom Properties" on startup:
+* `Default Type` - This allows you to specify a service-wide default data type
+  to use in unmarshalling payloads without a specified data type.
+* `Outgoing Queue Length Topic` - The topic on which the service will publish
+  the running size of a device's outgoing message queue. When using an
+  `Aggregation Delay` larger than 0, this topic will increment as more outgoing
+  values are aggregated. Omitting this parameter or setting it to "", disables
+  the functionality.
