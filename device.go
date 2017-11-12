@@ -195,7 +195,7 @@ func (d *Device) Subscribe() error {
 			} else {
 				for findex, name := range d.txfields {
 					if subtopic == name {
-						logitem.Debug("Received tx value %s", subtopic)
+						logitem.Debugf("Received tx value %s", subtopic)
 						err := d.TXQueuePost(string(payload), int(findex))
 						if err != nil {
 							logitem.Error(err)
