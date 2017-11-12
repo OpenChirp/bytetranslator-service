@@ -6,6 +6,18 @@ Do note that this service uses a simple and non-optimized approach for sending v
 across a channel. To use a more optimized serializer, please use
 [Easybits](https://github.com/OpenChirp/easybits-service).
 
+# Device's Service Config
+Note that all config parameters are optional and can be inferred or fall back on defaults.
+* `Incoming Field Names` - The names to assign to data fields received from the device
+* `Incoming Field Types` - The types used to encode the data fields from the device
+* `Outgoing Field Types` - The names of the transducers to send as fields to the device
+* `Outgoing Field Names` - The types used to encode the data fields sent to the device
+* `Endianness` - Indicates the order of bytes comprising an integer. (`little` or `big`)
+* `Aggregation Delay` - The duration of time to wait, while aggregating
+  outgoing data fields, before sending.
+  This is a sequence of decimal numbers, each with optional fraction and a
+  unit suffix, such as "300ms", "-1.5h" or "2h45m".
+  Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 # Design Decisions
 The overarching design principle is to be resilient to user configuration
@@ -32,19 +44,6 @@ names specified, then the message emitted will include blank elements for all
 all other specified fields. If the unnamed field refers to an index larger than
 the number of specified fields, the message emitted will have all previous
 indices' value blanked out, with the last value being the unnamed value's index.
-
-# Device's Service Config
-Note that all config parameters are optional and can be inferred or fall back on defaults.
-* `Incoming Field Names` - The names to assign to data fields received from the device
-* `Incoming Field Types` - The types used to encode the data fields from the device
-* `Outgoing Field Types` - The names of the transducers to send as fields to the device
-* `Outgoing Field Names` - The types used to encode the data fields sent to the device
-* `Endianness` - Indicates the order of bytes comprising an integer. (`little` or `big`)
-* `Aggregation Delay` - The duration of time to wait, while aggregating
-  outgoing data fields, before sending.
-  This is a sequence of decimal numbers, each with optional fraction and a
-  unit suffix, such as "300ms", "-1.5h" or "2h45m".
-  Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 # Service Level Configuration
 ByteTranslator will fetch the following two parameters from the Service's
