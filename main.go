@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/openchirp/framework"
 	"github.com/sirupsen/logrus"
@@ -27,7 +28,8 @@ const (
 	// This could be used as a service alive pulse if enabled
 	// Otherwise, the service status will indicate "Started" at the time the
 	// service "Started" the client
-	runningStatus = true
+	runningStatus          = true
+	periodicStatusDuration = time.Second * time.Duration(60)
 )
 
 const (
@@ -118,18 +120,19 @@ func run(ctx *cli.Context) error {
 	log.Debug("Published Service Status")
 
 	for {
+
+		/* If runningStatus is set, post a service status as an alive msg */
+		if runningStatus {
+			err = c.SetStatus(fmt.Sprintf("Running: %s", bt.Stats()))
+			if err != nil {
+				log.Error("Failed to publish service status: ", err)
+				return cli.NewExitError(nil, 1)
+			}
+			log.Debug("Published Service Status")
+		}
+
 		select {
 		case update := <-updates:
-			/* If runningStatus is set, post a service status as an alive msg */
-			if runningStatus {
-				err = c.SetStatus(fmt.Sprintf("Running: %s", bt.Stats()))
-				if err != nil {
-					log.Error("Failed to publish service status: ", err)
-					return cli.NewExitError(nil, 1)
-				}
-				log.Debug("Published Service Status")
-			}
-
 			logitem := log.WithFields(logrus.Fields{"type": update.Type, "deviceid": update.Id})
 
 			switch update.Type {
@@ -164,6 +167,7 @@ func run(ctx *cli.Context) error {
 				}
 				c.SetDeviceStatus(update.Id, "Success")
 			}
+		case <-time.After(periodicStatusDuration):
 		case sig := <-signals:
 			log.WithField("signal", sig).Info("Received signal")
 			goto cleanup
