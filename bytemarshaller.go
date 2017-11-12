@@ -9,7 +9,18 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"reflect"
+	"sort"
 	"strconv"
+)
+
+const (
+	alwaysIncludeAllFields = false
+	defaultFieldEmptyValue = 0
+)
+
+const (
+	defaultBufferSizeMultiplier = 4
 )
 
 type NumberType uint8
@@ -78,21 +89,26 @@ func ParseFieldType(name string) FieldType {
 	}
 }
 
+func FieldTypeFromGo(t reflect.Type) FieldType {
+	return ParseFieldType(t.String())
+}
+
 var fieldTypeInfo = map[FieldType]struct {
-	str   string
-	bytes int
+	str    string
+	bytes  int
+	gotype reflect.Type
 }{
-	FieldTypeUint8:   {"uint8", 1},
-	FieldTypeUint16:  {"uint16", 2},
-	FieldTypeUint32:  {"uint32", 4},
-	FieldTypeUint64:  {"uint64", 8},
-	FieldTypeInt8:    {"int8", 1},
-	FieldTypeInt16:   {"int16", 2},
-	FieldTypeInt32:   {"int32", 4},
-	FieldTypeInt64:   {"int64", 8},
-	FieldTypeFloat32: {"float32", 4},
-	FieldTypeFloat64: {"float64", 8},
-	FieldTypeUnknown: {"unknown", 0},
+	FieldTypeUint8:   {"uint8", 1, reflect.TypeOf(uint8(0))},
+	FieldTypeUint16:  {"uint16", 2, reflect.TypeOf(uint16(0))},
+	FieldTypeUint32:  {"uint32", 4, reflect.TypeOf(uint32(0))},
+	FieldTypeUint64:  {"uint64", 8, reflect.TypeOf(uint64(0))},
+	FieldTypeInt8:    {"int8", 1, reflect.TypeOf(int8(0))},
+	FieldTypeInt16:   {"int16", 2, reflect.TypeOf(int16(0))},
+	FieldTypeInt32:   {"int32", 4, reflect.TypeOf(int32(0))},
+	FieldTypeInt64:   {"int64", 8, reflect.TypeOf(int64(0))},
+	FieldTypeFloat32: {"float32", 4, reflect.TypeOf(float32(0))},
+	FieldTypeFloat64: {"float64", 8, reflect.TypeOf(float64(0))},
+	FieldTypeUnknown: {"unknown", 0, reflect.TypeOf(nil)},
 }
 
 func (ft FieldType) String() string {
@@ -101,6 +117,10 @@ func (ft FieldType) String() string {
 
 func (ft FieldType) ByteCount() int {
 	return fieldTypeInfo[ft].bytes
+}
+
+func (ft FieldType) GetGoType() reflect.Type {
+	return fieldTypeInfo[ft].gotype
 }
 
 func (ft FieldType) GetNumberType() NumberType {
@@ -198,6 +218,8 @@ func (ft FieldType) Marshal(buffer []byte, value interface{}, order binary.ByteO
 		i64 = int64(f64)
 
 	case string:
+		// Separate different categories, so we can have a different priority
+		// parsed types
 		switch ft {
 		case FieldTypeUint8:
 			fallthrough
@@ -206,9 +228,21 @@ func (ft FieldType) Marshal(buffer []byte, value interface{}, order binary.ByteO
 		case FieldTypeUint32:
 			fallthrough
 		case FieldTypeUint64:
-			u64, err = strconv.ParseUint(value.(string), 10, 64)
-			i64 = int64(u64)
-			f64 = float64(u64)
+			// Since we strive to parse/convert values at all cost,
+			// we will try the correct type first and they successively try
+			// other possible types.
+			// This technique is not perfect. For example, values that are
+			// out of range may fall into the last category
+			if u64, err = strconv.ParseUint(value.(string), 10, 64); err == nil {
+				i64 = int64(u64)
+				f64 = float64(u64)
+			} else if i64, err = strconv.ParseInt(value.(string), 10, 64); err == nil {
+				f64 = float64(i64)
+				u64 = uint64(i64)
+			} else if f64, err = strconv.ParseFloat(value.(string), 64); err == nil {
+				u64 = uint64(f64)
+				i64 = int64(f64)
+			}
 
 		case FieldTypeInt8:
 			fallthrough
@@ -217,16 +251,30 @@ func (ft FieldType) Marshal(buffer []byte, value interface{}, order binary.ByteO
 		case FieldTypeInt32:
 			fallthrough
 		case FieldTypeInt64:
-			i64, err = strconv.ParseInt(value.(string), 10, 64)
-			f64 = float64(i64)
-			u64 = uint64(i64)
+			if i64, err = strconv.ParseInt(value.(string), 10, 64); err == nil {
+				f64 = float64(i64)
+				u64 = uint64(i64)
+			} else if u64, err = strconv.ParseUint(value.(string), 10, 64); err == nil {
+				i64 = int64(u64)
+				f64 = float64(u64)
+			} else if f64, err = strconv.ParseFloat(value.(string), 64); err == nil {
+				u64 = uint64(f64)
+				i64 = int64(f64)
+			}
 
 		case FieldTypeFloat32:
 			fallthrough
 		case FieldTypeFloat64:
-			f64, err = strconv.ParseFloat(value.(string), 64)
-			u64 = uint64(f64)
-			i64 = int64(f64)
+			if f64, err = strconv.ParseFloat(value.(string), 64); err == nil {
+				u64 = uint64(f64)
+				i64 = int64(f64)
+			} else if u64, err = strconv.ParseUint(value.(string), 10, 64); err == nil {
+				i64 = int64(u64)
+				f64 = float64(u64)
+			} else if i64, err = strconv.ParseInt(value.(string), 10, 64); err == nil {
+				f64 = float64(i64)
+				u64 = uint64(i64)
+			}
 		}
 	default:
 		return 0
@@ -351,15 +399,97 @@ func NewByteMarshaller(types []FieldType, defaultType FieldType, littleEndian bo
 	return &ByteMarshaller{binary.BigEndian, types, defaultType}
 }
 
+// This function will always create the byte buffer even when an error is passed.
+func (m *ByteMarshaller) MarshalValues(values map[int][]byte) []byte {
+	findicies := make([]int, len(values))
+	index := 0
+	for findex, _ := range values {
+		findicies[index] = findex
+		index++
+	}
+
+	var minfindex int = 0
+	var maxfindex int
+
+	if len(values) == 0 {
+		maxfindex = -1
+	} else {
+		sort.Ints(findicies)
+
+		maxfindex = findicies[len(findicies)-1]
+	}
+
+	buffer := make([]byte, 0, ((maxfindex+1)-minfindex)*defaultBufferSizeMultiplier)
+	fmt.Println("Buffer before:", buffer)
+
+	var findex int
+	for findex = minfindex; findex <= maxfindex; findex++ {
+		if bytes, ok := values[findex]; ok {
+			buffer = append(buffer, bytes...)
+		} else {
+			bytes, _ := m.MarshalValue(defaultFieldEmptyValue, findex)
+			buffer = append(buffer, bytes...)
+		}
+		fmt.Println("FIndex=", findex, "Bytes this turn:", buffer)
+	}
+
+	if alwaysIncludeAllFields {
+		for ; findex < len(m.types); findex++ {
+			bytes, _ := m.MarshalValue(defaultFieldEmptyValue, findex)
+			buffer = append(buffer, bytes...)
+		}
+	}
+
+	return buffer
+}
+
+// This function will always create the byte buffer even when an error is passed.
+func (m *ByteMarshaller) MarshalValue(value interface{}, findex int) ([]byte, error) {
+	var err error
+
+	/* Calculate size of buffer */
+	size := 0
+	if 0 <= findex && findex < len(m.types) {
+		size += m.types[findex].ByteCount()
+	} else {
+		size += m.defaultType.ByteCount()
+	}
+
+	buffer := make([]byte, size)
+
+	/* Marshal field at index findex */
+	if 0 <= findex && findex < len(m.types) {
+		count := m.types[findex].Marshal(buffer, value, m.order)
+		if count == 0 {
+			// this means there was a parse error or FieldType==Unknown
+			err = fmt.Errorf("Parsing error or unknown data type")
+		}
+	} else {
+		count := m.defaultType.Marshal(buffer, value, m.order)
+		if count == 0 {
+			// this means there was a parse error or FieldType==Unknown
+			err = fmt.Errorf("Parsing error or unknown data type")
+		}
+	}
+	return buffer, err
+}
+
 // This function will always create a byte buffer even when an error is passed.
 func (m *ByteMarshaller) Marshal(values []interface{}) ([]byte, error) {
 	var err error
+	var findex int
+
 	/* Calculate size of buffer */
 	size := 0
-	for findex, _ := range values {
+	for findex, _ = range values {
 		if findex < len(m.types) {
 			size += m.types[findex].ByteCount()
 		} else {
+			size += m.defaultType.ByteCount()
+		}
+	}
+	if alwaysIncludeAllFields {
+		for ; findex < len(m.types); findex++ {
 			size += m.defaultType.ByteCount()
 		}
 	}
@@ -367,8 +497,9 @@ func (m *ByteMarshaller) Marshal(values []interface{}) ([]byte, error) {
 	buffer := make([]byte, size)
 
 	/* Marshal each field */
-	bindex := 0
-	for findex, value := range values {
+	var bindex int
+	var value interface{}
+	for findex, value = range values {
 		if findex < len(m.types) {
 			count := m.types[findex].Marshal(buffer[bindex:], value, m.order)
 			if count == 0 {
@@ -379,6 +510,17 @@ func (m *ByteMarshaller) Marshal(values []interface{}) ([]byte, error) {
 			bindex += count
 		} else {
 			count := m.defaultType.Marshal(buffer[bindex:], value, m.order)
+			if count == 0 {
+				// this means there was a parse error or FieldType==Unknown
+				err = fmt.Errorf("Parsing error or unknown data type")
+				count = m.defaultType.ByteCount()
+			}
+			bindex += count
+		}
+	}
+	if alwaysIncludeAllFields {
+		for ; findex < len(m.types); findex++ {
+			count := m.defaultType.Marshal(buffer[bindex:], defaultFieldEmptyValue, m.order)
 			if count == 0 {
 				// this means there was a parse error or FieldType==Unknown
 				err = fmt.Errorf("Parsing error or unknown data type")
