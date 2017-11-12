@@ -77,8 +77,9 @@ func run(ctx *cli.Context) error {
 	if len(defaultType) == 0 {
 		defaultType = defaultDefaultType
 	}
-	outgoingQueueTopic := c.GetProperty(propertyOutgoingQueueTopic)
-	if len(outgoingQueueTopic) == 0 {
+	var outgoingQueueTopic string
+	var ok bool
+	if outgoingQueueTopic, ok = c.GetProperties()[propertyOutgoingQueueTopic]; !ok {
 		outgoingQueueTopic = defaultOutgoingQueueTopic
 	}
 
