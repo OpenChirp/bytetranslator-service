@@ -12,8 +12,8 @@ on defaults when omitted. To use ByteTranslator without configuration, please
 see the `Missing Config Incoming/Outgoing Behavior` sections.
 * `Incoming Field Names` - The names to assign to data fields received from the device
 * `Incoming Field Types` - The types used to encode the data fields from the device
-* `Outgoing Field Types` - The names of the transducers to send as fields to the device
-* `Outgoing Field Names` - The types used to encode the data fields sent to the device
+* `Outgoing Field Names` - The names of the transducers to send as fields to the device
+* `Outgoing Field Types` - The types used to encode the data fields sent to the device
 * `Endianness` - Indicates the order of bytes comprising an integer. (`little` or `big`)
 * `Aggregation Delay` - The duration of time to wait, while aggregating
   outgoing data fields, before sending.
