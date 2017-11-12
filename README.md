@@ -43,7 +43,7 @@ It will try to use a specified field data type, but will use the default if
 one was not provided.
 If an unnamed outgoing value refers to an index less than the number of field
 names specified, then the message emitted will include blank elements for all
-all other specified fields. If the unnamed field refers to an index larger than
+other specified fields. If the unnamed field refers to an index larger than
 the number of specified fields, the message emitted will have all previous
 indices' value blanked out, with the last value being the unnamed value's index.
 
