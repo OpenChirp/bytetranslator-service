@@ -126,7 +126,6 @@ func (d *Device) SchedulerAction() {
 
 func (d *Device) RawRx(payload string) {
 	logitem := d.bt.log.WithField("deviceid", d.deviceid)
-	logitem.Debug("Received rawrx for deviceid ", d.deviceid)
 	binary, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
 		d.bt.log.Error("Failed decode base64 from rawrx", err)
