@@ -2,7 +2,6 @@ package main
 
 import (
 	"container/heap"
-	"fmt"
 	"sync"
 	"time"
 
@@ -11,64 +10,29 @@ import (
 
 const (
 	defaultSchedulingCapacity = 10
+	periodicStats             = false
+	periodicStatsDuration     = time.Second * time.Duration(60)
 	activationDuration        = time.Millisecond * time.Duration(1)
 )
 
-type SchedulerData struct {
-	when     time.Time
-	index    int
-	callback func(d *Device)
-}
-
-type DeviceSchedule []*Device
-
-func (h DeviceSchedule) Len() int           { return len(h) }
-func (h DeviceSchedule) Less(i, j int) bool { return h[i].when.Before(h[j].when) }
-func (h DeviceSchedule) Swap(i, j int) {
-	h[i].index, h[j].index = h[j].index, h[i].index
-	h[i], h[j] = h[j], h[i]
-}
-
-func (h *DeviceSchedule) Push(x interface{}) {
-	// Push and Pop use pointer receivers because they modify the slice's length,
-	// not just its contents.
-	*h = append(*h, x.(*Device))
-	x.(*Device).index = len(*h) - 1
-}
-
-func (h *DeviceSchedule) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	x.index = -1
-	return x
-}
-
-type SchedUpdateType int
-
-const (
-	SchedUpdateTypeAdd SchedUpdateType = iota
-	SchedUpdateTypeRem
-)
-
-type SchedUpdate struct {
-	event SchedUpdateType
-	d     *Device
-}
-
 type Scheduler struct {
-	dsched   DeviceSchedule
+	log      *logrus.Entry
+	allitems map[Scheduable]*SchedulerData
+	dsched   ScheduleHeap
 	updates  chan SchedUpdate
 	shutdown chan bool
+	stats    chan bool
 	wg       sync.WaitGroup
 }
 
-func NewScheduler() *Scheduler {
+func NewScheduler(log *logrus.Logger) *Scheduler {
 	sched := new(Scheduler)
-	sched.dsched = make(DeviceSchedule, 0, defaultSchedulingCapacity)
+	sched.log = log.WithField("module", "scheduler")
+	sched.allitems = make(map[Scheduable]*SchedulerData)
+	sched.dsched = make(ScheduleHeap, 0, defaultSchedulingCapacity)
 	sched.updates = make(chan SchedUpdate)
 	sched.shutdown = make(chan bool)
+	sched.stats = make(chan bool)
 	heap.Init(&sched.dsched)
 	return sched
 }
@@ -77,86 +41,136 @@ func (s *Scheduler) firstTime() time.Time {
 	if s.dsched.Len() == 0 {
 		return time.Now()
 	}
-	return s.dsched[0].SchedulerData.when
+	return s.dsched[0].when
 }
 
-func (s *Scheduler) add(d *Device) {
-	fmt.Printf("Adding schedule for %v\n", s.dsched)
-	heap.Push(&s.dsched, d)
+func (s *Scheduler) add(d Scheduable, when time.Time) {
+	s.log.Debugf("Request to add event for %v (%v)", when, when.Sub(time.Now()))
+	if _, ok := s.allitems[d]; !ok {
+		sdata := new(SchedulerData)
+		sdata.when = when
+		sdata.object = d
+		heap.Push(&s.dsched, sdata)
+		s.allitems[d] = sdata
+	}
 }
 
-func (s *Scheduler) remove(d *Device) {
-	heap.Remove(&s.dsched, d.SchedulerData.index)
+func (s *Scheduler) remove(d Scheduable) {
+	s.log.Debugf("Request to remove event")
+	if sdata, ok := s.allitems[d]; ok {
+		heap.Remove(&s.dsched, sdata.index)
+		delete(s.allitems, d)
+	}
+}
+
+func (s *Scheduler) printStats() {
+	if periodicStats {
+		s.log.Infof("Heap Length is %d", len(s.dsched))
+		s.log.Infof("Map Length is %d", len(s.allitems))
+	} else {
+		s.log.Debugf("Heap Length is %d", len(s.dsched))
+		s.log.Debugf("Map Length is %d", len(s.allitems))
+	}
 }
 
 func (s *Scheduler) runtime() {
 	defer s.wg.Done()
-	logrus.Print("Started runtime. Scheduler length is ", s.dsched.Len())
+
+	s.log.Info("Runtime started")
 
 	for {
+		s.printStats()
 		if s.dsched.Len() > 0 {
 			// Wait on current items
-			fmt.Println("Waiting for times up")
+			s.log.Debug("Waiting for event times")
 			select {
 			case update := <-s.updates:
-				logrus.Printf("Adding scheduled event")
 				switch update.event {
 				case SchedUpdateTypeAdd:
-					s.add(update.d)
+					s.add(update.d, update.when)
 				case SchedUpdateTypeRem:
 					s.remove(update.d)
 				}
 			case <-time.After(time.Until(s.firstTime())):
 				if time.Now().Sub(s.firstTime()) < activationDuration {
-					dev := heap.Pop(&s.dsched)
-					dev.(*Device).callback(dev.(*Device))
+					s.log.Debug("Acting on scheduler event")
+					sdata := heap.Pop(&s.dsched).(*SchedulerData)
+					delete(s.allitems, sdata.object)
+					sdata.object.SchedulerAction()
 				}
 			case <-s.shutdown:
 				return
+			case <-s.stats:
 			}
 		} else {
 			// No items currently
-			fmt.Println("Waiting for first add event")
+			s.log.Debug("Waiting for add or remove event")
 			select {
 			case update := <-s.updates:
-				fmt.Printf("Adding scheduled event\n")
 				switch update.event {
 				case SchedUpdateTypeAdd:
-					s.add(update.d)
+					s.add(update.d, update.when)
 				case SchedUpdateTypeRem:
 					s.remove(update.d)
 				}
 			case <-s.shutdown:
 				return
+			case <-s.stats:
 			}
 		}
 
 	}
 }
 
-func (s *Scheduler) Start() {
-	s.wg.Add(1)
-	go s.runtime()
+func (s *Scheduler) monitor() {
+	defer s.wg.Done()
+	s.log.Info("Monitor started")
+
+	if periodicStats {
+		for {
+			select {
+			case <-s.shutdown:
+				return
+			case <-time.After(periodicStatsDuration):
+				s.stats <- true
+			}
+		}
+	} else {
+		select {
+		case <-s.shutdown:
+			return
+		}
+
+	}
 }
+
+func (s *Scheduler) Start() {
+	s.wg.Add(2)
+	go s.runtime()
+	go s.monitor()
+}
+
 func (s *Scheduler) Stop() {
+	s.shutdown <- true
 	s.shutdown <- true
 	s.wg.Wait()
 }
 
-func (s *Scheduler) Add(d *Device, when time.Duration, callback func(d *Device)) {
-	fmt.Printf("In scheduler Add fn\n")
-	d.SchedulerData.when = time.Now().Add(when)
-	d.SchedulerData.callback = callback
-	fmt.Printf("In scheduler Add fn: set vars\n")
+func (s *Scheduler) Add(d Scheduable, when time.Duration) {
 	s.updates <- SchedUpdate{
-		SchedUpdateTypeAdd,
-		d,
+		event: SchedUpdateTypeAdd,
+		d:     d,
+		when:  time.Now().Add(when),
 	}
 }
 
-func (s *Scheduler) Cancel(d *Device) {
+func (s *Scheduler) Cancel(d Scheduable) {
 	s.updates <- SchedUpdate{
-		SchedUpdateTypeRem,
-		d,
+		event: SchedUpdateTypeRem,
+		d:     d,
 	}
+}
+
+func (s *Scheduler) QueueLen() int {
+	return len(s.dsched)
 }
