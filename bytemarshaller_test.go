@@ -120,10 +120,10 @@ func IsNegative(val interface{}) bool {
 	return f < 0
 }
 
-func UniversalTester(t *testing.T, val interface{}) bool {
-	defaultByteMarshallerType := FieldTypeFloat64
-
-	t.Log("Testing", reflect.TypeOf(val), val)
+func UniversalTester(t *testing.T, val interface{}, defaultType FieldType) bool {
+	if debugMessages {
+		t.Log("Testing", reflect.TypeOf(val), val)
+	}
 
 	// Here we will try to convert the given value/type to each of the possible
 	// other types using Marshal and a field for each possible type
@@ -154,6 +154,20 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 		val,
 		val,
 		val,
+
+		// extra item not in types - should have defaultType
+		val,
+		val,
+		val,
+		val,
+		val,
+	}
+
+	var extravalue string
+	if defaultType.GetNumberType() == NumberTypeFloat {
+		extravalue = fmt.Sprintf("%f", TypeCast(val, reflect.TypeOf(float64(0))).(float64))
+	} else {
+		extravalue = fmt.Sprint(val)
 	}
 
 	valuesString := []interface{}{
@@ -171,9 +185,16 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 		// precision is lost when it places the float in scientific form.
 		fmt.Sprintf("%f", TypeCast(val, reflect.TypeOf(float64(0))).(float64)),
 		fmt.Sprintf("%f", TypeCast(val, reflect.TypeOf(float64(0))).(float64)),
+
+		// extra item not in types
+		extravalue,
+		extravalue,
+		extravalue,
+		extravalue,
+		extravalue,
 	}
 
-	bm := NewByteMarshaller(types, defaultByteMarshallerType, true)
+	bm := NewByteMarshaller(types, defaultType, true)
 	if bm == nil {
 		t.Errorf("Err: NewByteTranslator return nil")
 	}
@@ -220,13 +241,22 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 
 	// Check that the type conversion were done correctly
 	for i, value := range retval {
-		truthValue := TypeCast(values[i], types[i].GetGoType())
+		var truthType reflect.Type
+		// check if it is the extra value
+		if i < len(types) {
+			truthType = types[i].GetGoType()
+		} else {
+			truthType = defaultType.GetGoType()
+		}
+
+		truthValue := TypeCast(values[i], truthType)
+
 		if debugMessages {
-			t.Logf("As a %v value should be %v", types[i], truthValue)
+			t.Logf("As a %v value should be %v", truthType, truthValue)
 		}
 		if !reflect.DeepEqual(value, truthValue) {
 			t.Logf("Err: Marshalled and Unmarshalled values do not match (outvalue=%v truthvalue=%v)", value, truthValue)
-			t.Logf("As a %v value should have been %v", types[i], truthValue)
+			t.Logf("As a %v value should have been %v", truthType, truthValue)
 			return false
 		}
 	}
@@ -253,12 +283,20 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 
 		// Check that the type conversion were done correctly
 		for i, value := range retval {
-			truthValue := TypeCast(values[i], types[i].GetGoType())
+			var truthType reflect.Type
+			// check if it is the extra value
+			if i < len(types) {
+				truthType = types[i].GetGoType()
+			} else {
+				truthType = defaultType.GetGoType()
+			}
+
+			truthValue := TypeCast(values[i], truthType)
 			if debugMessages {
-				t.Logf("As a %v value should be %v", types[i], truthValue)
+				t.Logf("As a %v value should be %v", truthType, truthValue)
 			}
 			if !reflect.DeepEqual(value, truthValue) {
-				t.Logf("As a %v value should have been %v", types[i], truthValue)
+				t.Logf("As a %v value should have been %v", truthType, truthValue)
 				t.Logf("Std Value: %v = %f", values[i], values[i])
 				t.Logf("Str Value: %v", valuesString[i])
 				t.Logf("Marshalled and Unmarshalled values do not match (outvalue=%v truthvalue=%v)", value, truthValue)
@@ -270,7 +308,7 @@ func UniversalTester(t *testing.T, val interface{}) bool {
 	return true
 }
 
-func TestAllTypes(t *testing.T) {
+func RunTestOnAllTypes(t *testing.T, defaultType FieldType) {
 	alltypes := []FieldType{
 		FieldTypeUint8,
 		FieldTypeUint16,
@@ -286,38 +324,38 @@ func TestAllTypes(t *testing.T) {
 
 	alltesters := []interface{}{
 		func(value uint8) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value uint16) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value uint32) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value uint64) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value int8) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value int16) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value int32) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value int64) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value float32) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 		func(value float64) bool {
-			return UniversalTester(t, value)
+			return UniversalTester(t, value, defaultType)
 		},
 	}
 
-	Convey("Testing marshalling and unmarshalling of all types", t, func() {
+	Convey("Testing marshal/unmarshal of all types using default type "+defaultType.String(), func() {
 		for i, bmtype := range alltypes {
 			Convey("Trying "+bmtype.String()+" input types", func() {
 				err := quick.Check(alltesters[i], nil)
@@ -325,5 +363,26 @@ func TestAllTypes(t *testing.T) {
 			})
 		}
 
+	})
+}
+
+func TestAllTypesAndAllDefaultTypes(t *testing.T) {
+	alltypes := []FieldType{
+		FieldTypeUint8,
+		FieldTypeUint16,
+		FieldTypeUint32,
+		FieldTypeUint64,
+		FieldTypeInt8,
+		FieldTypeInt16,
+		FieldTypeInt32,
+		FieldTypeInt64,
+		FieldTypeFloat32,
+		FieldTypeFloat64,
+	}
+
+	Convey("Set the default type ", t, func() {
+		for _, bmtype := range alltypes {
+			RunTestOnAllTypes(t, bmtype)
+		}
 	})
 }
