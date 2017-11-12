@@ -6,6 +6,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,14 +31,16 @@ const (
 )
 
 const (
-	defaultDefaultType       = "int16"
-	propertyDefaultType      = "Default Type"
-	configIncomingFieldNames = "Incoming Field Names"
-	configIncomingFieldTypes = "Incoming Field Types"
-	configOutgoingFieldNames = "Outgoing Field Names"
-	configOutgoingFieldTypes = "Outgoing Field Types"
-	configAggregationDelay   = "Aggregation Delay"
-	configEndianness         = "Endianness"
+	defaultDefaultType         = "int16"
+	defaultOutgoingQueueTopic  = "outgoingqueue"
+	propertyDefaultType        = "Default Type"
+	propertyOutgoingQueueTopic = "Outgoing Queue Length Topic"
+	configIncomingFieldNames   = "Incoming Field Names"
+	configIncomingFieldTypes   = "Incoming Field Types"
+	configOutgoingFieldNames   = "Outgoing Field Names"
+	configOutgoingFieldTypes   = "Outgoing Field Types"
+	configAggregationDelay     = "Aggregation Delay"
+	configEndianness           = "Endianness"
 )
 
 func run(ctx *cli.Context) error {
@@ -69,12 +72,18 @@ func run(ctx *cli.Context) error {
 	}
 	log.Debug("Published Service Status")
 
-	/* Launch ByteTranslator */
+	/* Fetch Service Settings */
 	defaultType := c.GetProperty(propertyDefaultType)
 	if len(defaultType) == 0 {
 		defaultType = defaultDefaultType
 	}
-	bt, err := NewByteTranslator(c, log, defaultType)
+	outgoingQueueTopic := c.GetProperty(propertyOutgoingQueueTopic)
+	if len(outgoingQueueTopic) == 0 {
+		outgoingQueueTopic = defaultOutgoingQueueTopic
+	}
+
+	/* Launch ByteTranslator */
+	bt, err := NewByteTranslator(c, log, defaultType, outgoingQueueTopic)
 	if err != nil {
 		log.Fatal("Failed to parse service property " + propertyDefaultType)
 		err = c.SetStatus("Service property " + propertyDefaultType + " invalid")
@@ -112,7 +121,7 @@ func run(ctx *cli.Context) error {
 		case update := <-updates:
 			/* If runningStatus is set, post a service status as an alive msg */
 			if runningStatus {
-				err = c.SetStatus("Running")
+				err = c.SetStatus(fmt.Sprintf("Running: %s", bt.Stats()))
 				if err != nil {
 					log.Error("Failed to publish service status: ", err)
 					return cli.NewExitError(nil, 1)
