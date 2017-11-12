@@ -25,7 +25,6 @@ const (
 
 var ErrUnknownFieldType = errors.New("Could not parse FieldType")
 
-// TODO: setup Device receiver functions to support min-heaps for scheduling
 var unnamedOutgoingValPattern = regexp.MustCompile("^(?i:" + defaultOutgoingPrefix + ")(\\d+)$")
 
 type ByteTranslator struct {
