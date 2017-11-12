@@ -7,7 +7,9 @@ across a channel. To use a more optimized serializer, please use
 [Easybits](https://github.com/OpenChirp/easybits-service).
 
 # Device's Service Config
-Note that all config parameters are optional and can be inferred or fall back on defaults.
+Note that all config parameters are optional and will be inferred or fall back
+on defaults when omitted. To use ByteTranslator without configuration, please
+see the `Missing Config Incoming/Outgoing Behavior` sections.
 * `Incoming Field Names` - The names to assign to data fields received from the device
 * `Incoming Field Types` - The types used to encode the data fields from the device
 * `Outgoing Field Types` - The names of the transducers to send as fields to the device
