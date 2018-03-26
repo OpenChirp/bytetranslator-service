@@ -18,7 +18,7 @@ const (
 	defaultIncomingPrefix        = "UnnamedValueIn"
 	defaultOutgoingPrefix        = "UnnamedValueOut"
 	defaultTxDelay               = time.Duration(0)
-	devicePrefix                 = "openchirp/devices/"
+	devicePrefix                 = "openchirp/device/"
 	deviceSuffix                 = "/" + framework.TransducerPrefix + "/"
 	unnamedValueOutIndexBitWidth = 16
 )
