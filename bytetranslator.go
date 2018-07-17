@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openchirp/framework"
 	"github.com/openchirp/framework/pubsub"
 
 	"github.com/sirupsen/logrus"
@@ -19,7 +18,7 @@ const (
 	defaultOutgoingPrefix        = "UnnamedValueOut"
 	defaultTxDelay               = time.Duration(0)
 	devicePrefix                 = "openchirp/device/"
-	deviceSuffix                 = "/" + framework.TransducerPrefix + "/"
+	deviceSuffix                 = "/"
 	unnamedValueOutIndexBitWidth = 16
 )
 
