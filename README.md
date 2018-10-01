@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/OpenChirp/bytetranslator-service.svg?branch=master)](https://travis-ci.org/OpenChirp/bytetranslator-service)
+
 # Byte Translator (aka. Byte Whisperer)
 This is an OpenChirp service that translates raw byte streams from devices
 into meaningful values.
