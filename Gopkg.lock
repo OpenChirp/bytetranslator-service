@@ -45,7 +45,7 @@
   revision = "b729f2633dfe35f4d1d8a32385f6685610ce1cb5"
 
 [[projects]]
-  digest = "1:040778cfe5976d1f3311e6a07ffe342d9a4eb264a15f4247dfdf92c2a76da1c1"
+  digest = "1:62d5b2ef1c6581f97c3ee6210ce5a8da196077c5be04175c02b539ecc7f0f406"
   name = "github.com/openchirp/framework"
   packages = [
     ".",
@@ -53,7 +53,8 @@
     "rest",
   ]
   pruneopts = "UT"
-  revision = "7da33e9f9a8bcac7c82c5c5e3f2e2d6cdd017d26"
+  revision = "cdaad003029612e522530bafc723a71634ee7d14"
+  version = "v1.1"
 
 [[projects]]
   digest = "1:dc2d85c13ac22c22a1f3170a41a8e1b897fa05134aaf533f16df44f66a25b4a1"
